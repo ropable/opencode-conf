@@ -6,29 +6,29 @@
     "bash": "ask",
     "webfetch": "allow",
   },
-  "plugin": ["opencode-websearch-cited", "opencode-supermemory", "oh-my-openagent@latest"],
+  "plugin": ["opencode-websearch-cited", "opencode-supermemory", "oh-my-openagent@latest", "@ramtinj95/opencode-tokenscope@latest"],
   "lsp": true,
   "compaction": {
-    "prune": false
+    "prune": false,
   },
   "provider": {
     "opencode": {
       "options": {
         "headers": {
           "sleev-provider": "opencode",
-          "sleev-harness": "opencode"
+          "sleev-harness": "opencode",
         },
-        "baseURL": "http://127.0.0.1:17321"
-      }
+        "baseURL": "http://127.0.0.1:17321",
+      },
     },
     "opencode-go": {
       "options": {
         "headers": {
           "sleev-provider": "opencode-go",
-          "sleev-harness": "opencode"
+          "sleev-harness": "opencode",
         },
-        "baseURL": "http://127.0.0.1:17321"
-      }
-    }
+        "baseURL": "http://127.0.0.1:17321",
+      },
+    },
   },
 }
