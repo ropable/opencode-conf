@@ -4,44 +4,72 @@
 // Uses the Supermemory v5 HTTP API directly. This repo intentionally has no
 // package.json (it is gitignored), so there is no local package project to
 // install the `supermemory` SDK into. Every call is namespace-scoped in the
-// URL and reads the key from SUPERMEMORY_API_KEY.
+// URL and reads the key from SUPERMEMORY_API_KEY, the global config file, or
+// the plugin credentials file (first match wins).
 //
-// Namespaces:
-//   opencode:ashley      durable operator preferences/decisions (taskType memory)
-//   project_opencode_conf  README + commit history for this repo (taskType superrag)
+// Namespaces are resolved per project; see scripts/lib/namespaces.mjs for the
+// precedence chain and the allowedUserNs guardrail. Print the effective values
+// with `config`.
 
 import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  DEFAULT_USER_NS,
+  defaultGlobalConfigPath,
+  isValidNamespace,
+  resolveApiKey,
+  resolveNamespaces,
+} from "./lib/namespaces.mjs";
 
-const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const ROOT = resolve(join(dirname(fileURLToPath(import.meta.url)), ".."));
 const API_BASE = (process.env.SUPERMEMORY_API_BASE ?? "https://api.supermemory.ai").replace(/\/+$/, "");
-const USER_NS = process.env.SUPERMEMORY_USER_NS ?? "opencode:ashley";
-const PROJECT_NS = process.env.SUPERMEMORY_PROJECT_NS ?? "project_opencode_conf";
-const NS_PATTERN = /^[a-zA-Z0-9_:-]{1,100}$/;
-const KEY = process.env.SUPERMEMORY_API_KEY;
+const KEY_INFO = resolveApiKey();
+const KEY = KEY_INFO.value;
 
 const USAGE = `Usage: node scripts/supermemory.mjs <command> [args]
 
 Commands:
-  profile                    Always-on profile for ${USER_NS}
-  recall <query>             Search memories in ${USER_NS}
-  remember <text>            Save a durable decision to ${USER_NS}
-  index                      Re-ingest README + git log into ${PROJECT_NS}
-  docs <query>               Search chunks in ${PROJECT_NS}
-  status <id>                Document pipeline status in ${USER_NS}
+  profile                    Always-on profile for the user namespace
+  recall <query>             Search memories in the user namespace
+  remember <text>            Save a durable decision to the user namespace
+  index                      Re-ingest this repo's README + git log into the project namespace
+  docs <query>               Search chunks in the project namespace
+  status <id>                Document pipeline status in the user namespace
+  config                     Show the resolved namespaces and where they came from
 
 Options:
   --limit <n>                Max results (default 5)
   --threshold <0-1>          Similarity cutoff (recall 0.5, docs 0.3)
   --id <id>                  Stable document id for remember
+  --user-ns <ns>             Override the user namespace for this call
+  --project-ns <ns>          Override the project namespace for this call
+  --json                     Machine-readable output (config)
+
+Namespace resolution (highest precedence first):
+  --user-ns / --project-ns, then SUPERMEMORY_USER_NS / SUPERMEMORY_PROJECT_NS,
+  then <repo>/.opencode/memory.local.jsonc, then <repo>/.opencode/memory.jsonc,
+  then ${defaultGlobalConfigPath()}, then defaults (${DEFAULT_USER_NS} / project_<repo>).
+  A user namespace from a project file must equal the global default or appear
+  in namespaces.allowedUserNs (global config) or SUPERMEMORY_ALLOWED_USER_NS.
 
 Environment:
-  SUPERMEMORY_API_KEY        Required
+  SUPERMEMORY_API_KEY        API key (else global config or plugin credentials)
   SUPERMEMORY_API_BASE       Optional, defaults to https://api.supermemory.ai
-  SUPERMEMORY_USER_NS        Optional, defaults to ${USER_NS}
-  SUPERMEMORY_PROJECT_NS     Optional, defaults to ${PROJECT_NS}`;
+  SUPERMEMORY_USER_NS        Optional user namespace override
+  SUPERMEMORY_PROJECT_NS     Optional project namespace override
+  SUPERMEMORY_ALLOWED_USER_NS  Optional comma-separated allowlist
+  SUPERMEMORY_CONFIG_DIR     Optional, defaults to ~/.config/opencode`;
+
+const [command, ...rest] = process.argv.slice(2);
+const { flags, query } = parseArgs(rest);
+const resolved = resolveNamespaces({
+  flags: { userNs: flags["user-ns"], projectNs: flags["project-ns"] },
+  warn: (message) => console.error(`supermemory: ${message}`),
+});
+const USER_NS = resolved.user.value;
+const PROJECT_NS = resolved.project.value;
 
 function fail(message) {
   console.error(`supermemory: ${message}`);
@@ -49,15 +77,27 @@ function fail(message) {
 }
 
 function assertNamespace(namespace) {
-  if (!NS_PATTERN.test(namespace)) {
+  if (!isValidNamespace(namespace)) {
     fail(`invalid namespace "${namespace}" (allowed: letters, digits, "_", ":", "-", max 100 chars)`);
+  }
+}
+
+function assertConfigRepo(commandName) {
+  if (resolve(resolved.projectRoot) !== ROOT) {
+    fail(
+      `${commandName} only indexes this config repo (${ROOT}); ` +
+        `run it from there. Nothing indexes ${resolved.projectRoot} yet.`,
+    );
   }
 }
 
 async function call(namespace, action, body, method = "POST") {
   assertNamespace(namespace);
   if (!KEY) {
-    fail("SUPERMEMORY_API_KEY is not set (environment or ~/.config/opencode/supermemory.jsonc)");
+    fail(
+      "no API key (checked SUPERMEMORY_API_KEY, " +
+        `${defaultGlobalConfigPath()}, and ~/.supermemory-opencode/credentials.json)`,
+    );
   }
 
   const headers = { Authorization: `Bearer ${KEY}` };
@@ -99,16 +139,19 @@ async function call(namespace, action, body, method = "POST") {
 function parseArgs(argv) {
   const flags = {};
   const words = [];
+  const valueFlags = ["limit", "threshold", "id", "user-ns", "project-ns"];
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
-    const match = arg.match(/^--(limit|threshold|id)=(.*)$/);
+    const match = arg.match(/^--(limit|threshold|id|user-ns|project-ns)=(.*)$/);
     if (match) {
       flags[match[1]] = match[2];
-    } else if (arg === "--limit" || arg === "--threshold" || arg === "--id") {
+    } else if (valueFlags.includes(arg.slice(2)) && arg.startsWith("--")) {
       const value = argv[i + 1];
       if (value === undefined) fail(`${arg} needs a value`);
       flags[arg.slice(2)] = value;
       i += 1;
+    } else if (arg === "--json") {
+      flags.json = true;
     } else if (arg.startsWith("--")) {
       fail(`unknown option ${arg}`);
     } else {
@@ -153,6 +196,28 @@ function printResults(results) {
   }
 }
 
+function config() {
+  if (flags.json) {
+    console.log(JSON.stringify({ ...resolved, apiKeySource: KEY_INFO.source }, null, 2));
+    return;
+  }
+  const rows = [
+    ["user", resolved.user.value, resolved.user.source],
+    ["project", resolved.project.value, resolved.project.source],
+  ];
+  console.log(`# Namespaces — ${resolved.projectRoot}`);
+  const width = Math.max(...rows.map(([label]) => label.length));
+  const valueWidth = Math.max(...rows.map(([, value]) => value.length));
+  for (const [label, value, source] of rows) {
+    console.log(`${label.padEnd(width)}  ${value.padEnd(valueWidth)}  ${source}`);
+  }
+  console.log(`allowed user namespaces: ${resolved.allowedUserNs.join(", ") || "(none beyond the default)"}`);
+  if (resolved.paths.projectLocal) console.log(`local override: ${resolved.paths.projectLocal}`);
+  if (resolved.user.source.startsWith("project")) {
+    console.log(`note: user namespace comes from ${resolved.user.source}; it is allowlisted, not the default`);
+  }
+}
+
 async function profile() {
   const data = await call(USER_NS, "profile", {});
   const { static: stable = [], dynamic = [] } = data?.profile ?? {};
@@ -192,12 +257,13 @@ async function remember(flags, text) {
       source: "opencode",
       kind: "decision",
       recorded: new Date().toISOString().slice(0, 10),
+      project: resolved.projectRoot,
     },
   };
   if (flags.id) body.id = flags.id;
 
   const data = await call(USER_NS, "document", body);
-  console.log(`queued ${data?.id ?? "(no id)"} (status: ${data?.status ?? "unknown"})`);
+  console.log(`queued ${data?.id ?? "(no id)"} in ${USER_NS} (status: ${data?.status ?? "unknown"})`);
   console.log("Instant processing bills one extra operation; poll with `status <id>` before relying on recall.");
 }
 
@@ -206,6 +272,7 @@ function git(args) {
 }
 
 async function index() {
+  assertConfigRepo("index");
   const readme = readFileSync(join(ROOT, "README.md"), "utf8");
   const log = git(["log", "--pretty=format:- %h %ad %s", "--date=short", "-n", "100"]);
   const branch = git(["rev-parse", "--abbrev-ref", "HEAD"]);
@@ -267,14 +334,10 @@ async function status(flags, id) {
   console.log(parts.join(" — "));
 }
 
-const [command, ...rest] = process.argv.slice(2);
-
 if (!command || command === "help" || command === "--help" || command === "-h") {
   console.log(USAGE);
   process.exit(command ? 0 : 1);
 }
-
-const { flags, query } = parseArgs(rest);
 
 try {
   switch (command) {
@@ -295,6 +358,9 @@ try {
       break;
     case "status":
       await status(flags, query);
+      break;
+    case "config":
+      config();
       break;
     default:
       fail(`unknown command "${command}"\n\n${USAGE}`);

@@ -21,7 +21,7 @@ This repository holds this machine's global OpenCode configuration:
 - `opencode.jsonc` — server configuration: pinned plugins, permissions, compaction, and the providers routed through Sleev.
 - `cli.json` — terminal client settings (theme, cursor, diff wrapping).
 - `skills/` — globally available agent skills (`docker-pro`, `github-actions-workflow-pro`, `opencode-memory`).
-- `scripts/supermemory.mjs` — zero-dependency helper for the two Supermemory namespaces described in [Project memory](#project-memory).
+- `scripts/supermemory.mjs` — zero-dependency helper for the Supermemory namespaces described in [Project memory](#project-memory); `scripts/lib/namespaces.mjs` resolves them per project.
 
 **Sleev is required.** Both configured providers (`opencode` and `opencode-go`) send model requests through the local Sleev gateway at `http://127.0.0.1:17321`. If the gateway is not running, model requests fail. See [Optional: disable the Sleev requirement](#optional-disable-the-sleev-requirement) to run without it.
 
@@ -132,20 +132,54 @@ Two Supermemory namespaces complement the `opencode-supermemory` plugin. Each re
 | Namespace | Purpose | Pipeline | Search mode |
 | --- | --- | --- | --- |
 | `opencode:ashley` | Durable operator preferences and decisions that apply across projects | `memory` | `memories` |
-| `project_opencode_conf` | This README and the repository's commit history | `superrag` | `chunks` |
+| `project_<repo>` | Per-repository docs index, e.g. `project_opencode_conf` for this repo | `superrag` | `chunks` |
+
+The helper resolves both namespaces per project, highest precedence first:
+
+1. `--user-ns` / `--project-ns` flags
+2. `SUPERMEMORY_USER_NS` / `SUPERMEMORY_PROJECT_NS`
+3. `<repo>/.opencode/memory.local.jsonc` (machine only)
+4. `<repo>/.opencode/memory.jsonc` (committed)
+5. `~/.config/opencode/supermemory.jsonc` → `namespaces.user` / `namespaces.project`
+6. Defaults: `opencode:ashley` and `project_<repo>`
+
+Resolution walks up from the working directory to the git toplevel, so a command run in `referral/` still resolves the repository's file. Show the effective values and where each came from:
+
+```sh
+node scripts/supermemory.mjs config          # human readable
+node scripts/supermemory.mjs config --json   # machine readable
+```
+
+A project file only needs the field it changes; the local file overrides the committed one field by field:
+
+```jsonc
+// <repo>/.opencode/memory.jsonc
+{ "namespaces": { "project": "project_prs" } }
+```
+
+```jsonc
+// <repo>/.opencode/memory.local.jsonc — keep out of version control
+{ "namespaces": { "user": "opencode:ashley:work" } }
+```
+
+**Guardrail.** A project file is repository-supplied input, so it cannot redirect the personal namespace on its own. A `user` value from a project file applies only when it matches the global default or appears in `namespaces.allowedUserNs` in `supermemory.jsonc` (or in `SUPERMEMORY_ALLOWED_USER_NS`). Anything else is ignored with a warning. Project namespaces are repo-scoped, so project files may set those freely.
+
+Prefer setting only `project` per repository. A per-repository *user* namespace fragments durable preferences — a fact learned in one repository is invisible in the next — so reserve it for a deliberate work/personal split.
 
 ```sh
 node scripts/supermemory.mjs profile
 node scripts/supermemory.mjs recall "provider routing"
 node scripts/supermemory.mjs remember "Decision: ... Reason: ... Files: ..."
-node scripts/supermemory.mjs index    # re-ingest README + git log
+node scripts/supermemory.mjs index    # re-ingest this README + git log
 node scripts/supermemory.mjs docs "gateway restart"
 node scripts/supermemory.mjs status <id>
 ```
 
-`remember` uses instant extraction (one extra operation per decision) so a saved fact starts processing immediately; `status <id>` reports when the document is `done` and whether `dreaming` has cleared. `index` uses stable document ids, so re-running it diffs instead of duplicating.
+`remember` uses instant extraction (one extra operation per decision) so a saved fact starts processing immediately; `status <id>` reports when the document is `done` and whether `dreaming` has cleared. `index` uses stable document ids, so re-running it diffs instead of duplicating. `index` only covers this repository and refuses to run elsewhere.
 
-The script calls the v5 HTTP API directly and reads `SUPERMEMORY_API_KEY`. It is deliberately dependency-free: this repository gitignores `package.json`, so there is no local package project to install the official SDK into. The `opencode-memory` skill tells the agent when to use each namespace. The plugin's automatic per-repository capture is separate and unchanged.
+The script calls the v5 HTTP API directly and resolves the key from `SUPERMEMORY_API_KEY`, `supermemory.jsonc`, or the plugin credentials file. It is deliberately dependency-free: this repository gitignores `package.json`, so there is no local package project to install the official SDK into. The `opencode-memory` skill tells the agent when to use each namespace. Resolution and the guardrail are covered by `node --test scripts/namespaces.test.mjs`.
+
+The plugin does not read project files: it reads `~/.config/opencode/supermemory.jsonc` and auto-captures per git remote. Project namespace files govern the helper and skill only.
 
 ## Notes
 

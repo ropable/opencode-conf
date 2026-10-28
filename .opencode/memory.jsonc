@@ -1,0 +1,8 @@
+{
+  // Project memory for this config repo. The helper walks up from the current
+  // directory, so this file governs any command run under ~/.config/opencode.
+  // See README.md "Project memory" for precedence and the allowedUserNs guardrail.
+  "namespaces": {
+    "project": "project_opencode_conf"
+  }
+}
