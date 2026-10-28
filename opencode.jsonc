@@ -11,25 +11,27 @@
   "permissions": [
     { "action": "edit", "resource": "*", "effect": "ask" },
     { "action": "external_directory", "resource": "*", "effect": "ask" },
+    { "action": "external_directory", "resource": "/tmp/opencode/*", "effect": "allow" },
+    { "action": "external_directory", "resource": "~/.config/opencode/*", "effect": "allow" },
   ],
   "providers": {
     "opencode-go": {
       "settings": {
-        "baseURL": "http://127.0.0.1:17321"
+        "baseURL": "http://127.0.0.1:17321",
       },
       "headers": {
         "sleev-provider": "opencode-go",
-        "sleev-harness": "opencode"
-      }
+        "sleev-harness": "opencode",
+      },
     },
     "opencode": {
       "settings": {
-        "baseURL": "http://127.0.0.1:17321"
+        "baseURL": "http://127.0.0.1:17321",
       },
       "headers": {
         "sleev-provider": "opencode",
-        "sleev-harness": "opencode"
-      }
-    }
+        "sleev-harness": "opencode",
+      },
+    },
   },
 }
