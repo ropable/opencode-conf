@@ -20,7 +20,8 @@ This repository holds this machine's global OpenCode configuration:
 
 - `opencode.jsonc` — server configuration: pinned plugins, permissions, compaction, and the providers routed through Sleev.
 - `cli.json` — terminal client settings (theme, cursor, diff wrapping).
-- `skills/` — globally available agent skills (`docker-pro`, `github-actions-workflow-pro`).
+- `skills/` — globally available agent skills (`docker-pro`, `github-actions-workflow-pro`, `opencode-memory`).
+- `scripts/supermemory.mjs` — zero-dependency helper for the two Supermemory namespaces described in [Project memory](#project-memory).
 
 **Sleev is required.** Both configured providers (`opencode` and `opencode-go`) send model requests through the local Sleev gateway at `http://127.0.0.1:17321`. If the gateway is not running, model requests fail. See [Optional: disable the Sleev requirement](#optional-disable-the-sleev-requirement) to run without it.
 
@@ -123,6 +124,28 @@ These commands rewrite `~/.config/opencode/opencode.jsonc`, which is tracked by 
 Delete the `providers` block from `opencode.jsonc`, then run `opencode reload`. Without those overrides, OpenCode uses its usual Console provider endpoints and does not contact Sleev.
 
 Leave the removal uncommitted if you want the option to switch back, or commit it if you no longer intend to use Sleev.
+
+## Project memory
+
+Two Supermemory namespaces complement the `opencode-supermemory` plugin. Each request touches exactly one namespace, and the namespace is always the first path segment (`/ns/{namespace}/...`).
+
+| Namespace | Purpose | Pipeline | Search mode |
+| --- | --- | --- | --- |
+| `opencode:ashley` | Durable operator preferences and decisions that apply across projects | `memory` | `memories` |
+| `project_opencode_conf` | This README and the repository's commit history | `superrag` | `chunks` |
+
+```sh
+node scripts/supermemory.mjs profile
+node scripts/supermemory.mjs recall "provider routing"
+node scripts/supermemory.mjs remember "Decision: ... Reason: ... Files: ..."
+node scripts/supermemory.mjs index    # re-ingest README + git log
+node scripts/supermemory.mjs docs "gateway restart"
+node scripts/supermemory.mjs status <id>
+```
+
+`remember` uses instant extraction (one extra operation per decision) so a saved fact starts processing immediately; `status <id>` reports when the document is `done` and whether `dreaming` has cleared. `index` uses stable document ids, so re-running it diffs instead of duplicating.
+
+The script calls the v5 HTTP API directly and reads `SUPERMEMORY_API_KEY`. It is deliberately dependency-free: this repository gitignores `package.json`, so there is no local package project to install the official SDK into. The `opencode-memory` skill tells the agent when to use each namespace. The plugin's automatic per-repository capture is separate and unchanged.
 
 ## Notes
 
