@@ -1,56 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "autoupdate": true,
-  "permission": {
-    "edit": "ask",
-    "bash": {
-      "*": "ask",
-      "rm *": "deny",
-      "rmdir *": "deny",
-      "ls *": "allow",
-      "wc *": "allow",
-      "echo *": "allow",
-      "cat *": "allow",
-      "sed *": "allow",
-      "tail *": "allow",
-      "printf *": "allow",
-      "mkdir *": "allow",
-      "git *": "ask",
-      "git log *": "allow",
-      "git status *": "allow",
-      "git show *": "allow",
-      "git rev-parse *": "allow",
-      "source *": "allow",
-    },
-    "glob": "allow",
-    "grep": "allow",
-    "webfetch": "allow",
-    "websearch": "allow",
-  },
-  // "plugin": ["opencode-websearch-cited", "opencode-supermemory", "@ramtinj95/opencode-tokenscope@latest"],
-  "plugin": ["opencode-websearch-cited", "opencode-supermemory", "oh-my-openagent@latest", "@ramtinj95/opencode-tokenscope@latest"],
+  "update": "notify",
+  "plugins": ["opencode-supermemory", "cc-safety-net@latest"],
   "lsp": true,
   "compaction": {
-    "prune": false,
-  },
-  "provider": {
-    "opencode": {
-      "options": {
-        "headers": {
-          "sleev-provider": "opencode",
-          "sleev-harness": "opencode",
-        },
-        "baseURL": "http://127.0.0.1:17321",
-      },
+    "auto": true,
+    "keep": {
+      "tokens": 15000,
     },
-    "opencode-go": {
-      "options": {
-        "headers": {
-          "sleev-provider": "opencode-go",
-          "sleev-harness": "opencode",
-        },
-        "baseURL": "http://127.0.0.1:17321",
-      },
-    },
+    "buffer": 20000,
   },
 }

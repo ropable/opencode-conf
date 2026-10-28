@@ -20,19 +20,12 @@ This repository contains the configuration files for OpenCode, an interactive CL
 
 ## Setup and Usage
 
-1. **Installation**:
-   - Ensure OpenCode CLI is installed: <https://opencode.ai/docs/#install>
-   - Install **oh-my-openagent** Ultimate (omo for OpenCode): <https://omo.dev/docs#installation>
-   - Install and configure `sleev`: <https://sleev.ai/docs/quickstart/#install>
-   - Clone or copy this repository to `~/.config/opencode`.
-   - Start `opencode` and authenticate with OpenCode Go.
+**Installation**:
 
-## Documentation
+- Ensure OpenCode CLI is installed: <https://opencode.ai/v2/docs/>
+- Clone or copy this repository to `~/.config/opencode`.
+- Start `opencode` and authenticate with OpenCode Go.
 
-- <https://opencode.ai/docs/>
-- <https://omo.dev/docs>
+Optional:
 
-## References
-
-- <https://medium.com/@jatinkrmalik/opencode-go-oh-my-openagent-the-complete-guide-to-sota-model-routing-without-hitting-limits-49fdc8cb3417>
-- <https://dev.to/devansh365/opencode-go-oh-my-openagent-the-model-routing-config-that-actually-saves-money-3jmj>
+- Install and configure `sleev`: <https://sleev.ai/docs/quickstart/install>
