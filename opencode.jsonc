@@ -1,6 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "plugins": ["opencode-supermemory@2.0.17", "cc-safety-net@2.7.0"],
+  "mcp": {
+    "supermemory-docs": {
+      "type": "remote",
+      "url": "https://supermemory.ai/docs/mcp",
+      "enabled": true,
+    },
+  },
   "lsp": true,
   "compaction": {
     "keep": {
