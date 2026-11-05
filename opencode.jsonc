@@ -4,7 +4,7 @@
   "plugins": [
     "opencode-supermemory@2.1.2",
     "cc-safety-net@2.7.0",
-    "@tarquinen/opencode-dcp@3.2.0",
+    // "@tarquinen/opencode-dcp@3.2.0",
     "@upstash/context7-opencode@0.2.1",
     "opencode-planning-with-files@1.2.0",
   ],

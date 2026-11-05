@@ -20,7 +20,7 @@ This repository holds this machine's global OpenCode configuration:
 
 - `opencode.jsonc` — server configuration: pinned plugins, permissions, compaction, and the providers routed through Sleev.
 - `cli.json` — terminal client settings (theme, cursor, diff wrapping).
-- `skills/` — globally available agent skills (`docker-pro`, `github-actions-workflow-pro`, `opencode-memory`).
+- `skills/` — globally available agent skills (`docker-pro`, `github-actions-workflow-pro`, `opencode-memory`); the Context7 plugin adds `context7-mcp`, and OpenCode ships the built-in `opencode` and `report` skills.
 - `scripts/supermemory.mjs` — zero-dependency helper for the Supermemory namespaces described in [Project memory](#project-memory); `scripts/lib/namespaces.mjs` resolves them per project.
 
 **Sleev is required.** Both configured providers (`opencode` and `opencode-go`) send model requests through the local Sleev gateway at `http://127.0.0.1:17321`. If the gateway is not running, model requests fail. See [Optional: disable the Sleev requirement](#optional-disable-the-sleev-requirement) to run without it.
@@ -125,14 +125,29 @@ Delete the `providers` block from `opencode.jsonc`, then run `opencode reload`. 
 
 Leave the removal uncommitted if you want the option to switch back, or commit it if you no longer intend to use Sleev.
 
+## Skills
+
+Skills under `skills/` are versioned with this repository; the rest are supplied by OpenCode or by plugins. All of them are discovered automatically — no config entry is needed.
+
+| Skill                         | Source                               | What it does                                                                                                                                                                                                                                                                    |
+| ----------------------------- | ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `opencode`                    | Built in                             | Answers questions about OpenCode itself: configuration, agents, commands, skills, tools, permissions, MCP servers, providers, models, themes, keybinds, formatters, the CLI/TUI/desktop/web apps, the SDK, plugins, V1→V2 migration, and contributing to the OpenCode codebase. |
+| `report`                      | Built in                             | Files an OpenCode bug report: gathers standard diagnostics, adds reproduction context, and publishes the issue with `gh issue create`.                                                                                                                                          |
+| `context7-mcp`                | `@upstash/context7-opencode` plugin  | Fetches current library and framework documentation through the Context7 MCP server (resolve a library ID, then query docs) instead of relying on training data.                                                                                                                |
+| `docker-pro`                  | `skills/docker-pro`                  | Applies strongly opinionated modern Docker + BuildKit rules to `Dockerfile`, `.dockerignore`, `docker-bake.hcl`, and `compose.yaml`: multi-stage builds, digest pinning, cache mounts, secrets, and hardened/distroless base images. Includes evals.                            |
+| `github-actions-workflow-pro` | `skills/github-actions-workflow-pro` | Creates, edits, and hardens `.github/workflows/*`: action pinning, least-privilege tokens, build caching, matrix builds, release automation, and Docker image publishing. Includes evals.                                                                                       |
+| `opencode-memory`             | `skills/opencode-memory`             | Tells the agent when and how to recall or save durable context in the Supermemory namespaces described in [Project memory](#project-memory), keeping memory scoped to this project.                                                                                             |
+
+Two related plugins are not skills but shape agent behaviour: `opencode-planning-with-files` adds persistent `task_plan.md` / `findings.md` / `progress.md` planning with the `pwf_init`, `pwf_status`, and `pwf_check` tools, and `opencode-supermemory` provides automatic memory capture.
+
 ## Project memory
 
 Two Supermemory namespaces complement the `opencode-supermemory` plugin. Each request touches exactly one namespace, and the namespace is always the first path segment (`/ns/{namespace}/...`).
 
-| Namespace | Purpose | Pipeline | Search mode |
-| --- | --- | --- | --- |
-| `opencode:ashley` | Durable operator preferences and decisions that apply across projects | `memory` | `memories` |
-| `project_<repo>` | Per-repository docs index, e.g. `project_opencode_conf` for this repo | `superrag` | `chunks` |
+| Namespace         | Purpose                                                               | Pipeline   | Search mode |
+| ----------------- | --------------------------------------------------------------------- | ---------- | ----------- |
+| `opencode:ashley` | Durable operator preferences and decisions that apply across projects | `memory`   | `memories`  |
+| `project_<repo>`  | Per-repository docs index, e.g. `project_opencode_conf` for this repo | `superrag` | `chunks`    |
 
 The helper resolves both namespaces per project, highest precedence first:
 
@@ -164,7 +179,7 @@ A project file only needs the field it changes; the local file overrides the com
 
 **Guardrail.** A project file is repository-supplied input, so it cannot redirect the personal namespace on its own. A `user` value from a project file applies only when it matches the global default or appears in `namespaces.allowedUserNs` in `supermemory.jsonc` (or in `SUPERMEMORY_ALLOWED_USER_NS`). Anything else is ignored with a warning. Project namespaces are repo-scoped, so project files may set those freely.
 
-Prefer setting only `project` per repository. A per-repository *user* namespace fragments durable preferences — a fact learned in one repository is invisible in the next — so reserve it for a deliberate work/personal split.
+Prefer setting only `project` per repository. A per-repository _user_ namespace fragments durable preferences — a fact learned in one repository is invisible in the next — so reserve it for a deliberate work/personal split.
 
 ```sh
 node scripts/supermemory.mjs profile
@@ -183,6 +198,6 @@ The plugin does not read project files: it reads `~/.config/opencode/supermemory
 
 ## Notes
 
-- Plugins are pinned (`opencode-supermemory@2.0.17`, `cc-safety-net@2.7.0`) so background updates cannot change them; update deliberately and restart with `opencode reload`.
+- Plugins used pinned versions so background updates cannot change them; update deliberately and restart with `opencode reload`. `@tarquinen/opencode-dcp` is commented out: its `compress` tool collides with the built-in `compress` tool in OpenCode v2, and the gateway rejects the request with `duplicate tool name 'compress'`. Re-enable it only after a DCP release supports OpenCode v2 tool names.
 - `permissions` asks before edits and before access outside the active project. Shell commands are additionally screened by `cc-safety-net` for destructive operations and secret access.
-- Skills under `skills/` are discovered automatically; no config entry is needed.
+- Skills under `skills/` are discovered automatically; no config entry is needed. Plugin-provided skills (such as `context7-mcp`) arrive with their plugin, and built-in skills are always available.
