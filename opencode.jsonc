@@ -1,7 +1,13 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "shell": "/bin/bash",
-  "plugins": ["opencode-supermemory@2.1.1", "cc-safety-net@2.7.0"],
+  "plugins": [
+    "opencode-supermemory@2.1.2",
+    "cc-safety-net@2.7.0",
+    "@tarquinen/opencode-dcp@3.2.0",
+    "@upstash/context7-opencode@0.2.1",
+    "opencode-planning-with-files@1.2.0",
+  ],
   "agents": {
     "reviewer": {
       "description": "Review changes without editing files",
